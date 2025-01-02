@@ -1,101 +1,220 @@
-import Image from "next/image";
+"use client";
+import React, { useRef, useCallback, useEffect, useState } from "react";
+import { generateColor } from "@/lib/utils";
 
-export default function Home() {
+const greenSpectrum = [
+  "#00FF00",
+  "#00EE00",
+  "#00CC00",
+  "#00AA00",
+  "#008800",
+  "#006600",
+  "#004400",
+  "#002200",
+];
+
+export default function GameOfLife() {
+  const [windowDimensions, setWindowDimensions] = useState({
+    width: 0,
+    height: 0,
+  });
+  const [isVisible, setIsVisible] = useState(true);
+  const [generation, setGeneration] = useState(0);
+  const canvasRef = useRef(null);
+  const cellSize = 4;
+  const [grid, setGrid] = useState([]);
+  const [cells, setCells] = useState({});
+
+  useEffect(() => {
+    const handleResize = () => {
+      setWindowDimensions({
+        width: window.innerWidth,
+        height: window.innerHeight,
+      });
+    };
+
+    handleResize();
+    window.addEventListener("resize", handleResize);
+
+    const handleVisibilityChange = () => {
+      setIsVisible(!document.hidden);
+    };
+
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+
+    return () => {
+      window.removeEventListener("resize", handleResize);
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+    };
+  }, []);
+
+  useEffect(() => {
+    if (windowDimensions.width === 0 || windowDimensions.height === 0) return;
+
+    const newGrid = [];
+    for (let i = 0; i < windowDimensions.width / cellSize; i++) {
+      newGrid[i] = [];
+      for (let j = 0; j < windowDimensions.height / cellSize; j++) {
+        newGrid[i][j] = Math.random() < 0.09 ? 1 : 0;
+      }
+    }
+    setGrid(newGrid);
+  }, [windowDimensions]);
+
+  const countAliveNeighbors = useCallback(
+    (x, y) => {
+      let count = 0;
+      for (let i = -1; i <= 1; i++) {
+        for (let j = -1; j <= 1; j++) {
+          if (i === 0 && j === 0) continue;
+          const row =
+            (x + i + windowDimensions.width / cellSize) %
+            (windowDimensions.width / cellSize);
+          const col =
+            (y + j + windowDimensions.height / cellSize) %
+            (windowDimensions.height / cellSize);
+          if (grid && grid[row] && grid[row][col]) {
+            count += grid[row][col] > 0 ? 1 : 0;
+          }
+        }
+      }
+      return count;
+    },
+    [grid, windowDimensions]
+  );
+
+  const updateCell = useCallback(
+    (x, y, alive, aliveNeighbors) => {
+      const position = `${x}.${y}`;
+      const newCells = { ...cells };
+      const cellExistsInPosition = cells.hasOwnProperty(position);
+
+      if (!cellExistsInPosition && alive) {
+        const newGen = cells[position]?.gen ?? 0;
+        const newColor = greenSpectrum[aliveNeighbors];
+        newCells[position] = { aliveNeighbors, gen: newGen, color: "red" };
+      }
+
+      if (cellExistsInPosition) {
+        if (aliveNeighbors === 2 || aliveNeighbors === 3) {
+          const newGen = cells[position]?.gen ? cells[position].gen + 1 : 0;
+          newCells[position] = {
+            aliveNeighbors,
+            gen: newGen,
+            color: cells[position]?.color,
+          };
+        } else if (aliveNeighbors === 3) {
+          const newGen = cells[position]?.gen ? cells[position].gen + 1 : 0;
+          const newColor = greenSpectrum[aliveNeighbors];
+          newCells[position] = { aliveNeighbors, gen: newGen, color: "red" };
+        }
+      }
+      setCells(newCells);
+    },
+    [cells]
+  );
+
+  const update = useCallback(() => {
+    const newGrid = [];
+    for (let i = 0; i < windowDimensions.width / cellSize; i++) {
+      newGrid[i] = [];
+      for (let j = 0; j < windowDimensions.height / cellSize; j++) {
+        const aliveNeighbors = countAliveNeighbors(i, j);
+        if (grid && grid[i] && grid[i][j] && grid[i][j] > 0) {
+          const alive = aliveNeighbors === 2 || aliveNeighbors === 3 ? 1 : 0;
+          newGrid[i][j] = alive;
+          updateCell(i, j, alive, aliveNeighbors);
+        } else {
+          const alive = aliveNeighbors === 3 ? 1 : 0;
+          newGrid[i][j] = alive;
+          updateCell(i, j, alive, aliveNeighbors);
+        }
+      }
+    }
+    setGrid(newGrid);
+  }, [grid, cells, windowDimensions, countAliveNeighbors, updateCell]);
+
+  const draw = useCallback(() => {
+    if (!canvasRef?.current) return;
+    const ctx = canvasRef.current.getContext("2d");
+    ctx.clearRect(0, 0, windowDimensions.width, windowDimensions.height);
+    for (let i = 0; i < windowDimensions.width / cellSize; i++) {
+      for (let j = 0; j < windowDimensions.height / cellSize; j++) {
+        if (grid && grid[i] && grid[i][j]) {
+          ctx.fillStyle = generateColor(i, j);
+          ctx.fillRect(i * cellSize, j * cellSize, cellSize, cellSize);
+        }
+      }
+    }
+  }, [grid, cells, windowDimensions]);
+
+  const handleDownload = () => {
+    const canvas = canvasRef.current;
+    const dataURL = canvas.toDataURL("image/png");
+    const link = document.createElement("a");
+    link.download = "image.png";
+    link.href = dataURL;
+    link.click();
+  };
+
+  const animate = useCallback(() => {
+    update();
+    draw();
+  }, [update, draw]);
+
+  useEffect(() => {
+    const intervalId = setInterval(() => {
+      if (!isVisible) return;
+      setGeneration((gen) => gen + 1);
+      requestAnimationFrame(animate);
+    }, 30);
+
+    return () => clearInterval(intervalId);
+  }, [animate, isVisible]);
+
   return (
-    <div className="grid grid-rows-[20px_1fr_20px] items-center justify-items-center min-h-screen p-8 pb-20 gap-16 sm:p-20 font-[family-name:var(--font-geist-sans)]">
-      <main className="flex flex-col gap-8 row-start-2 items-center sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={180}
-          height={38}
-          priority
+    <div style={{ position: "relative" }}>
+      {windowDimensions.width > 0 && windowDimensions.height > 0 && (
+        <canvas
+          width={windowDimensions.width}
+          height={windowDimensions.height}
+          className="gameOfLife"
+          ref={canvasRef}
         />
-        <ol className="list-inside list-decimal text-sm text-center sm:text-left font-[family-name:var(--font-geist-mono)]">
-          <li className="mb-2">
-            Get started by editing{" "}
-            <code className="bg-black/[.05] dark:bg-white/[.06] px-1 py-0.5 rounded font-semibold">
-              app/page.js
-            </code>
-            .
-          </li>
-          <li>Save and see your changes instantly.</li>
-        </ol>
-
-        <div className="flex gap-4 items-center flex-col sm:flex-row">
-          <a
-            className="rounded-full border border-solid border-transparent transition-colors flex items-center justify-center bg-foreground text-background gap-2 hover:bg-[#383838] dark:hover:bg-[#ccc] text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={20}
-              height={20}
-            />
-            Deploy now
-          </a>
-          <a
-            className="rounded-full border border-solid border-black/[.08] dark:border-white/[.145] transition-colors flex items-center justify-center hover:bg-[#f2f2f2] dark:hover:bg-[#1a1a1a] hover:border-transparent text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5 sm:min-w-44"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Read our docs
-          </a>
-        </div>
-      </main>
-      <footer className="row-start-3 flex gap-6 flex-wrap items-center justify-center">
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/file.svg"
-            alt="File icon"
-            width={16}
-            height={16}
-          />
-          Learn
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/window.svg"
-            alt="Window icon"
-            width={16}
-            height={16}
-          />
-          Examples
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/globe.svg"
-            alt="Globe icon"
-            width={16}
-            height={16}
-          />
-          Go to nextjs.org →
-        </a>
-      </footer>
+      )}
+      <div
+        style={{
+          position: "absolute",
+          left: 20,
+          bottom: 24,
+          color: "#fff",
+          background: "rgba(64,64,64,0.9)",
+          padding: "3px 6px",
+          borderRadius: "8px",
+          fontSize: "0.9em",
+          fontFamily: "Helvetica, sans-serif",
+        }}
+      >
+        Generation {generation}
+      </div>
+      <div
+        onClick={handleDownload}
+        style={{
+          position: "absolute",
+          right: 20,
+          bottom: 24,
+          color: "#fff",
+          background: "rgba(64,64,64,0.9)",
+          padding: "3px 6px",
+          borderRadius: "8px",
+          fontSize: "0.9em",
+          fontFamily: "Helvetica, sans-serif",
+          zIndex: 999,
+          cursor: "pointer",
+        }}
+      >
+        📸
+      </div>
     </div>
   );
 }
