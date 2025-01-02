@@ -3,8 +3,9 @@ The Game of Life, commonly referred to as Conway's Game of Life, is a cellular a
 In the Game of Life, each cell can be in one of two states: "alive" or "dead". The fate of each cell in the next generation depends on the states of the eight neighboring cells that surround it.
 
 The rules governing the game are as follows:
-  An alive cell will remain alive in the next generation if it has 2 or 3 live neighbors. Otherwise, it dies.
-  A dead cell will become alive if it has exactly 3 live neighbors. In all other cases, it stays dead.
+
+- An alive cell will remain alive in the next generation if it has 2 or 3 live neighbors. Otherwise, it dies.
+- A dead cell will become alive if it has exactly 3 live neighbors. In all other cases, it stays dead.
 
 These simple rules lead to complex and often unpredictable patterns as the game evolves over time.
 
